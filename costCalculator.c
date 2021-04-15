@@ -123,15 +123,14 @@ void *produce(void *arg) {
 
 /**
  * Consume threads.
- * @param numValores
+ * @param
  * @return
  */
-void *consume(int *numValores) {
-    struct element data;
+void *consume(int *valueCount) {
     /**
      * Read for operations.
      */
-    for (int k = 0; k < *numValores; k++) {
+    for (int k = 0; k < *valueCount; k++) {
 
 
         lockMutex(&ring);
@@ -205,19 +204,19 @@ int main(int argc, const char *argv[]) {
 
     FILE *descriptor = openFile(argv[1]);
 
-    int numVal;
-    if (fscanf(descriptor, "%d", &numVal) < 0) {
+    int valCount;
+    if (fscanf(descriptor, "%d", &valCount) < 0) {
         perror("Error extracting file data.\n");
         exit(-1);
     }
     int numLin = calculateLines(argv[1]);
-    if (numVal > (numLin - 1)) {
+    if (valCount > (numLin - 1)) {
         perror("Wrong operations number.\n");
         return -1;
     }
 
-    int productores = atoi(argv[2]);
-    if (productores <= 0) {
+    int productorCount = atoi(argv[2]);
+    if (productorCount <= 0) {
         perror("Invalid productors count.\n");
         return -1;
     }
@@ -236,48 +235,55 @@ int main(int argc, const char *argv[]) {
         perror("Error while initializing mutex.\n");
         exit(-1);
     }
-    //Creamos los hilos y establecemos el nº de operaciones que hará cada uno
-    int operaciones = floor((numVal / productores));
-    int idcio = 1;
-    pthread_t hilosP[productores];
-    pthread_t hiloC;
-    if (pthread_create(&hiloC, NULL, (void *) consume, &numVal) < 0) {
+    /**
+     * Create threads and set operation count per each
+     */
+    int ops = floor((valCount / productorCount));
+    int initialId = 1;
+    pthread_t pThreads[productorCount];
+    pthread_t cThread;
+    if (pthread_create(&cThread, NULL, (void *) consume, &valCount) < 0) {
         perror("Error creating thread.");
         exit(-1);
     }
-    //Ejecución de las operaciones
+
+    /**
+     * Execute operations.
+     */
     int i;
     cFile = malloc(sizeof(char[strlen(argv[1])]));
     cFile = argv[1];
-    struct param args[productores];
-    for (i = 0; i < (productores - 1); i++) {
-        args[i].op = operaciones;
-        args[i].id = idcio;
+    struct param args[productorCount];
+    for (i = 0; i < (productorCount - 1); i++) {
+        args[i].op = ops;
+        args[i].id = initialId;
 
-        if (pthread_create(&hilosP[i], NULL, (void *) produce, &args[i]) < 0) {
+        if (pthread_create(&pThreads[i], NULL, (void *) produce, &args[i]) < 0) {
             perror("Error creating thread.\n");
             exit(-1);
         }
 
-        idcio += operaciones;
+        initialId += ops;
     }
-    int op_ultimo = numVal - (i * operaciones);
-    args[productores - 1].op = op_ultimo;
-    args[productores - 1].id = idcio;
+    int latestOp = valCount - (i * ops);
+    args[productorCount - 1].op = latestOp;
+    args[productorCount - 1].id = initialId;
 
-    //Control de errores de operaciones y valores finales
-    if (pthread_create(&hilosP[productores - 1], NULL, (void *) produce, &args[productores - 1]) < 0) {
+    /**
+     * Check for operation errors and final values.
+     */
+    if (pthread_create(&pThreads[productorCount - 1], NULL, (void *) produce, &args[productorCount - 1]) < 0) {
         perror("Error creating thread.\n");
         exit(-1);
     }
 
-    for (int i = 0; i < productores; i++) {
-        if (pthread_join(hilosP[i], NULL) < 0) {
+    for (int i = 0; i < productorCount; i++) {
+        if (pthread_join(pThreads[i], NULL) < 0) {
             perror("Error while waiting for thread.\n");
             exit(-1);
         }
     }
-    if (pthread_join(hiloC, NULL) < 0) {
+    if (pthread_join(cThread, NULL) < 0) {
         perror("Error joining thread.\n");
         exit(-1);
     }
